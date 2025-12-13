@@ -181,18 +181,22 @@
         #certificate-area { margin-top: 25px; display: none; animation: fadeIn 0.5s ease-out; }
         .evidence-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .print-btn { background: #3498db; color: white; border: none; padding: 5px 15px; border-radius: 20px; font-weight: 700; font-size: 0.75rem; cursor: pointer; }
+        
+        /* Container for Sticker + Photo */
         .evidence-container { display: flex; gap: 15px; align-items: stretch; }
+        
         .sticker {
             flex: 2; background: #fff; border: 4px solid var(--primary-green); border-radius: 12px; padding: 15px;
             display: flex; align-items: center; justify-content: space-between; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             position: relative; overflow: hidden; -webkit-print-color-adjust: exact;
         }
         .sticker::before { content: ""; position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: var(--gold); }
-        .sticker-info { text-align: left; padding-left: 15px; }
+        .sticker-info { text-align: left; padding-left: 15px; flex: 1; }
         .sticker-grade { font-family: 'Montserrat'; font-weight: 900; font-size: 1.5rem; color: var(--primary-green); line-height: 1;}
         .sticker-label { font-size: 0.6rem; text-transform: uppercase; color: #7f8c8d; font-weight: 700; letter-spacing: 1px; margin-top: 5px;}
         .sticker-meta { font-size: 0.7rem; color: #333; margin-top: 5px; font-weight: 600;}
         #sticker-qr { width: 80px !important; height: 80px !important; background: white; flex-shrink: 0; margin-left: 15px; }
+        
         .proof-photo-large { flex: 1; height: 110px; border-radius: 12px; border: 4px solid #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.1); object-fit: cover; background: #000; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
@@ -204,32 +208,28 @@
             .sticker, .proof-photo-large { box-shadow: none; border: 2px solid #333; }
         }
 
-        /* --- MOBILE OPTIMIZATIONS (The Fix) --- */
+        /* --- MOBILE OPTIMIZATIONS (FIXED) --- */
         @media screen and (max-width: 768px) {
-            /* Fix Language Toggle Overlap */
-            .lang-toggle {
-                position: relative; 
-                top: auto; right: auto;
-                text-align: center;
-                margin-bottom: 10px;
-                background: none;
-            }
-
-            /* Stack Main Layout */
+            .lang-toggle { position: relative; top: auto; right: auto; text-align: center; margin-bottom: 10px; background: none; }
             .dashboard-container { flex-direction: column; }
-            
-            /* Full width cards */
             .app-card, .legend-card { width: 100%; min-width: unset; box-sizing: border-box; }
-
-            /* Fix Meta Bar (Batch ID + Location) */
             .meta-bar { flex-direction: column; gap: 10px; text-align: center; }
             .meta-item { text-align: center !important; }
-
-            /* Camera Square Aspect Ratio */
             #scan-container { height: auto; aspect-ratio: 1 / 1; }
-
-            /* Buttons */
             .btn { padding: 12px; font-size: 0.8rem; }
+
+            /* STACK EVIDENCE CARD VERTICALLY */
+            .evidence-container {
+                flex-direction: column; 
+            }
+            .sticker {
+                width: 100%;
+                box-sizing: border-box;
+            }
+            .proof-photo-large {
+                width: 100%;
+                height: 150px; /* Fixed height for neatness */
+            }
         }
 
     </style>
