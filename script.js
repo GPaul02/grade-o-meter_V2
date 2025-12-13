@@ -7,7 +7,7 @@ function setLang(el) {
 }
 
 // --- CONFIGURATION ---
-const URL = "./my_model/";
+const URL = "./";
 let model, webcam, maxPredictions;
 let isScanning = false;
 let currentDiagnosis = "Clean"; 
