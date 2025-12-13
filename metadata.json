@@ -1,0 +1,1 @@
+{"tfjsVersion":"1.7.4","tmVersion":"2.4.10","packageVersion":"0.8.4-alpha2","packageName":"@teachablemachine/image","timeStamp":"2025-12-13T06:49:44.893Z","userMetadata":{},"modelName":"tm-my-image-model","labels":["Fresh Apples (Class 1)","Apple Scab (Class 2 - \"Scab\")","Rotten Apples (Class 3 - \"Rot\")"],"imageSize":224}
