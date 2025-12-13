@@ -31,38 +31,19 @@
             color: var(--text-dark);
             margin: 0; padding: 20px;
             min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-            position: relative; /* Essential for top-right positioning */
+            position: relative;
         }
 
-        /* --- LANGUAGE TOGGLE (The Missing Part) --- */
+        /* --- LANGUAGE TOGGLE --- */
         .lang-toggle {
-            position: absolute;
-            top: 20px;
-            right: 30px;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: #95a5a6; /* Default Grey */
-            z-index: 1000;
-            cursor: default;
-            background: rgba(255,255,255,0.8); /* Slight background for readability */
-            padding: 5px 10px;
-            border-radius: 20px;
+            position: absolute; top: 20px; right: 30px;
+            font-family: 'Montserrat', sans-serif; font-size: 0.9rem; font-weight: 700;
+            color: #95a5a6; z-index: 1000; cursor: default;
+            background: rgba(255,255,255,0.8); padding: 5px 10px; border-radius: 20px;
         }
-        .lang-toggle span {
-            cursor: pointer;
-            margin: 0 4px;
-            padding-bottom: 2px;
-            transition: all 0.2s;
-        }
-        .lang-toggle span:hover {
-            color: var(--primary-green);
-        }
-        /* Active State */
-        .lang-toggle span.active {
-            color: var(--dark-green);
-            border-bottom: 2px solid var(--primary-green);
-        }
+        .lang-toggle span { cursor: pointer; margin: 0 4px; padding-bottom: 2px; transition: all 0.2s; }
+        .lang-toggle span:hover { color: var(--primary-green); }
+        .lang-toggle span.active { color: var(--dark-green); border-bottom: 2px solid var(--primary-green); }
 
         /* Header */
         .header { text-align: center; margin-bottom: 20px; color: var(--text-dark); }
@@ -71,13 +52,10 @@
 
         /* Meta Bar */
         .meta-bar {
-            display: flex; justify-content: space-between;
-            width: 100%; max-width: 1100px;
-            background: rgba(44, 62, 80, 0.8);
-            backdrop-filter: blur(10px);
+            display: flex; justify-content: space-between; width: 100%; max-width: 1100px;
+            background: rgba(44, 62, 80, 0.8); backdrop-filter: blur(10px);
             padding: 12px 25px; border-radius: 12px; margin-bottom: 25px;
-            color: white; 
-            border: 1px solid rgba(44, 62, 80, 0.3); box-sizing: border-box;
+            color: white; border: 1px solid rgba(44, 62, 80, 0.3); box-sizing: border-box;
         }
         .meta-item strong { display: block; font-size: 0.75rem; opacity: 0.7; letter-spacing: 1px;}
 
@@ -91,8 +69,7 @@
         /* Left Panel */
         .app-card {
             flex: 3; background: var(--card-bg); padding: 25px; border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.05);
-            text-align: center; min-width: 300px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.05); text-align: center; min-width: 300px;
         }
 
         /* Scanner */
@@ -108,7 +85,7 @@
             display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
         }
         
-        /* High Contrast Text */
+        /* Grid Box Text */
         .grid-box {
             border: 1px solid rgba(255,255,255,0.3); display: flex;
             align-items: center; justify-content: center; color: white;
@@ -138,7 +115,6 @@
             border: 1px solid #eee; overflow: hidden; 
             box-shadow: 0 5px 15px rgba(0,0,0,0.05);
         }
-        
         .advice-body { padding: 20px; }
 
         .defect-warning { 
@@ -151,24 +127,14 @@
             margin: 0; padding-left: 0; list-style: none;
             color: #2c3e50; font-size: 0.95rem; line-height: 1.6; 
         }
-        .action-list li { 
-            margin-bottom: 8px; display: flex; align-items: flex-start;
-        }
-        .action-list li::before {
-            content: "⬤"; margin-right: 8px; font-size: 0.8rem;
-        }
+        .action-list li { margin-bottom: 8px; display: flex; align-items: flex-start; }
+        .action-list li::before { content: "👉"; margin-right: 8px; font-size: 0.8rem; }
 
         /* Verdict Box */
         .verdict-box {
-            background: var(--alert-red);
-            color: white;
-            padding: 15px;
-            text-align: center;
-            font-family: 'Montserrat', sans-serif;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-size: 0.9rem;
+            background: var(--alert-red); color: white; padding: 15px;
+            text-align: center; font-family: 'Montserrat', sans-serif;
+            font-weight: 800; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem;
         }
         .verdict-warning { background: var(--warning-orange); }
         .verdict-danger { background: var(--alert-red); }
@@ -177,8 +143,7 @@
         /* Right Panel (Log) */
         .legend-card {
             flex: 2; background: var(--sidebar-bg); padding: 25px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.05);
+            border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.05);
             min-width: 300px; height: fit-content; border: 1px solid #e1e8e6;
         }
         .legend-title {
@@ -189,15 +154,11 @@
         .log-container { max-height: 450px; overflow-y: auto; }
         .log-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; font-size: 0.85rem; }
         .log-table th { text-align: left; padding: 10px; color: #95a5a6; font-weight: 600; letter-spacing: 1px;}
-        
         .log-table tbody tr {
             background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             border-radius: 8px; transition: transform 0.2s, background-color 0.2s;
         }
-        .log-table tbody tr:hover {
-            transform: translateY(-2px); background-color: var(--neutral-grey);
-            border-left: 4px solid #bdc3c7; 
-        }
+        .log-table tbody tr:hover { transform: translateY(-2px); background-color: var(--neutral-grey); border-left: 4px solid #bdc3c7; }
         .log-table td { padding: 10px; vertical-align: middle; }
         .log-table td:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
         .log-table td:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
@@ -212,15 +173,9 @@
             display: flex; align-items: center; justify-content: center;
             font-weight: 800; border: none; padding: 0;
         }
-        .btn-view-cert {
-            background: #e1e8e6; color: #333; font-size: 0.75rem; gap: 5px;
-            cursor: pointer; transition: all 0.2s;
-        }
+        .btn-view-cert { background: #e1e8e6; color: #333; font-size: 0.75rem; gap: 5px; cursor: pointer; transition: all 0.2s; }
         .btn-view-cert:hover { background: #2ecc71; color: white; }
-        .btn-view-fail {
-            background: rgba(231, 76, 60, 0.15); color: #e74c3c; 
-            font-size: 1.1rem; cursor: default; 
-        }
+        .btn-view-fail { background: rgba(231, 76, 60, 0.15); color: #e74c3c; font-size: 1.1rem; cursor: default; }
 
         /* Evidence Area */
         #certificate-area { margin-top: 25px; display: none; animation: fadeIn 0.5s ease-out; }
@@ -240,6 +195,7 @@
         #sticker-qr { width: 80px !important; height: 80px !important; background: white; flex-shrink: 0; margin-left: 15px; }
         .proof-photo-large { flex: 1; height: 110px; border-radius: 12px; border: 4px solid #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.1); object-fit: cover; background: #000; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
         @media print {
             body * { visibility: hidden; }
             #certificate-area, #certificate-area * { visibility: visible; }
@@ -247,6 +203,35 @@
             .evidence-header { display: none; }
             .sticker, .proof-photo-large { box-shadow: none; border: 2px solid #333; }
         }
+
+        /* --- MOBILE OPTIMIZATIONS (The Fix) --- */
+        @media screen and (max-width: 768px) {
+            /* Fix Language Toggle Overlap */
+            .lang-toggle {
+                position: relative; 
+                top: auto; right: auto;
+                text-align: center;
+                margin-bottom: 10px;
+                background: none;
+            }
+
+            /* Stack Main Layout */
+            .dashboard-container { flex-direction: column; }
+            
+            /* Full width cards */
+            .app-card, .legend-card { width: 100%; min-width: unset; box-sizing: border-box; }
+
+            /* Fix Meta Bar (Batch ID + Location) */
+            .meta-bar { flex-direction: column; gap: 10px; text-align: center; }
+            .meta-item { text-align: center !important; }
+
+            /* Camera Square Aspect Ratio */
+            #scan-container { height: auto; aspect-ratio: 1 / 1; }
+
+            /* Buttons */
+            .btn { padding: 12px; font-size: 0.8rem; }
+        }
+
     </style>
 </head>
 <body>
@@ -287,15 +272,15 @@
             </div>
 
             <div class="btn-group">
-                <button class="btn btn-start" onclick="init()"> LIVE SCAN </button>
-                <button class="btn btn-log" onclick="logCurrentState()"> SAVE & PRINT LABEL</button>
+                <button class="btn btn-start" onclick="init()">🔴 LIVE CAM</button>
+                <button class="btn btn-log" onclick="logCurrentState()">💾 SAVE & PRINT LABEL</button>
             </div>
 
             <div id="advisory-panel">
                 <div id="advice-content">
                     <div class="advice-body">
                         <div style="color: #95a5a6; font-style: italic;">
-                            System Idle. Start Camera to begin analysis.
+                            🌱 System Idle. Start Camera to begin analysis.
                         </div>
                     </div>
                 </div>
@@ -303,8 +288,8 @@
 
             <div id="certificate-area">
                 <div class="evidence-header">
-                    <div style="font-size: 0.8rem; font-weight: 700; color: #2c3e50;"> DIGITAL CERTIFICATE:</div>
-                    <button class="print-btn" onclick="window.print()"> PRINT LABEL</button>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: #2c3e50;">🔍 GENERATED EVIDENCE:</div>
+                    <button class="print-btn" onclick="window.print()">🖨️ PRINT LABEL</button>
                 </div>
                 
                 <div class="evidence-container">
@@ -324,7 +309,7 @@
 
         <div class="legend-card">
             <div class="legend-title">
-                <span style="margin-right: 10px;"> </span> Scan History
+                <span style="margin-right: 10px;">✅</span> Quality Ledger
             </div>
             <div class="log-container">
                 <table class="log-table">
