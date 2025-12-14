@@ -7,13 +7,17 @@ function setLang(el) {
 }
 
 // --- CONFIGURATION ---
-const URL = "./";
+const URL = "./"; // FIXED PATH FOR GITHUB PAGES
 let model, webcam, maxPredictions;
 let isScanning = false;
 let currentDiagnosis = "Clean"; 
 let auditHistory = {}; 
 
-// --- EXPERT KNOWLEDGE BASE (Separated Verdict) ---
+// --- SMOOTHING VARIABLES (THE FIX) ---
+let lastRan = 0;
+const PREDICTION_INTERVAL = 500; // Only predict every 500ms (0.5 seconds)
+
+// --- EXPERT KNOWLEDGE BASE ---
 const ADVICE_DB = {
     "SCAB": {
         title: "SCAB DETECTED",
@@ -22,7 +26,7 @@ const ADVICE_DB = {
             <li>Re-scan this batch after 5–7 days.</li>
         `,
         verdict: "ACTION: DOWNGRADE FROM GRADE A",
-        verdictClass: "verdict-warning" // Orange
+        verdictClass: "verdict-warning"
     },
     "ROT": {
         title: "ROT DETECTED",
@@ -31,13 +35,13 @@ const ADVICE_DB = {
             <li>Inspect surrounding crates for contamination.</li>
         `,
         verdict: "CRITICAL: REJECT BATCH (DO NOT SHIP)",
-        verdictClass: "verdict-danger" // Red
+        verdictClass: "verdict-danger"
     },
     "FRESH": {
         title: "BATCH CLEAN",
         steps: `<li>Fruit quality meets Grade A standards.</li>`,
         verdict: "READY FOR SHIPMENT",
-        verdictClass: "verdict-success" // Green
+        verdictClass: "verdict-success"
     }
 };
 
@@ -113,16 +117,23 @@ async function init() {
     maxPredictions = model.getTotalClasses();
 
     const video = document.getElementById('webcam');
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+    });
     video.srcObject = stream;
     video.play();
     isScanning = true;
     requestAnimationFrame(loop);
 }
 
-async function loop() {
+// --- THE SMOOTHING LOOP ---
+async function loop(timestamp) {
     if (isScanning) {
-        await predictGrid();
+        // Only run logic if 500ms has passed since last run
+        if (timestamp - lastRan >= PREDICTION_INTERVAL) {
+            await predictGrid();
+            lastRan = timestamp;
+        }
         requestAnimationFrame(loop);
     }
 }
@@ -162,12 +173,14 @@ async function predictGrid() {
 
         const boxDiv = document.getElementById(zone.id);
         
+        // 0 = Fresh, 1/2 = Defects
         if (bestIndex === 0) {
             boxDiv.className = "grid-box status-ok";
             boxDiv.innerText = "OK";
         } else {
             let defectName = (bestIndex === 1) ? "SCAB" : "ROT";
-            if (highestProb > 0.80) {
+            // Threshold Check: Only show defect if > 85% confident
+            if (highestProb > 0.85) { 
                 boxDiv.className = "grid-box status-bad";
                 boxDiv.innerText = defectName;
                 foundIssues.add(defectName);
@@ -180,7 +193,7 @@ async function predictGrid() {
     updatePanel(foundIssues);
 }
 
-// --- UI UPDATES (New Card Layout) ---
+// --- UI UPDATES ---
 function updatePanel(issues) {
     const panel = document.getElementById('advice-content');
     
@@ -206,7 +219,6 @@ function updatePanel(issues) {
                 <div class="defect-warning">⚠️ ${data.title}</div>
                 <ul class="action-list">${data.steps}</ul>
             `;
-            // Last issue dictates the verdict for now
             finalVerdict = data.verdict;
             finalClass = data.verdictClass;
         });
@@ -228,7 +240,6 @@ function logCurrentState() {
     const tbody = document.getElementById('log-body');
     const video = document.getElementById('webcam');
 
-    // 1. CAPTURE SNAPSHOT
     const canvas = document.createElement('canvas');
     canvas.width = 300; 
     canvas.height = 300;
@@ -236,7 +247,6 @@ function logCurrentState() {
     ctx.drawImage(video, 0, 0, 300, 300); 
     const imgData = canvas.toDataURL('image/jpeg');
 
-    // 2. SAVE TO MEMORY
     auditHistory[batchID] = {
         time: time,
         location: location,
@@ -247,7 +257,6 @@ function logCurrentState() {
     let badgeClass = currentDiagnosis === "Clean" ? "badge-pass" : "badge-fail";
     let statusText = currentDiagnosis === "Clean" ? "PASSED" : "FAILED";
 
-    // 3. CREATE INTERACTIVE ROW
     let buttonHTML = "";
     
     if (currentDiagnosis === "Clean") {
