@@ -71,13 +71,27 @@ async function successGPS(position) {
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
         const data = await response.json();
-        const city = data.address.city || data.address.town || data.address.village || "Unknown Location";
+        
+        // Smarter Fallback: Checks every possible location type
+        const locationName = data.address.city || 
+                             data.address.town || 
+                             data.address.village || 
+                             data.address.suburb || 
+                             data.address.neighbourhood ||
+                             data.address.county || 
+                             data.address.district ||
+                             "Unknown Location";
+                             
         const state = data.address.state || "";
-        document.getElementById('location-id').innerText = `📍 ${city}, ${state}`;
+        
+        // Update the UI
+        document.getElementById('location-id').innerText = `📍 ${locationName}, ${state}`;
     } catch (error) {
+        // If internet fails, just show coordinates
         document.getElementById('location-id').innerText = `📍 Lat: ${lat.toFixed(2)}`;
     }
 }
+
 
 function errorGPS() {
     document.getElementById('location-id').innerText = "🚫 Location Denied";
