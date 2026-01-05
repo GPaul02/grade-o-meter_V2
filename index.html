@@ -60,19 +60,22 @@
             box-shadow: 0 20px 40px rgba(0,0,0,0.05); text-align: center; min-width: 300px;
         }
 
-        /* --- HYBRID SCANNER CONTAINER --- */
-        #scan-container {
-            position: relative; 
-            width: 100%; max-width: 400px; 
-            height: 350px;
-            margin: 0 auto 25px auto; 
-            border-radius: 15px; 
-            overflow: hidden;
-            background: #000; 
-            border: 3px solid #333;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            display: flex; justify-content: center; align-items: center;
-        }
+      /* --- FIXED SCANNER CONTAINER --- */
+#scan-container {
+    position: relative; 
+    
+    /* FORCE EXACT MATCH WITH JS (300x300) */
+    width: 300px; 
+    height: 300px; 
+    
+    margin: 0 auto 25px auto; 
+    border-radius: 15px; 
+    overflow: hidden;
+    background: #000; 
+    border: 3px solid #333;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    display: flex; justify-content: center; align-items: center;
+}
 
         /* Layer 1: The Webcam */
         #webcam-container canvas {
