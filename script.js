@@ -6,12 +6,15 @@ let isScanning = false;
 let totalScanned = 0;
 let requiredApples = 20;
 let defectCount = 0;
-let isLookingAtGap = true; // Start assuming we are looking at a gap
+let isLookingAtGap = true; // Start assuming we are looking at a gap (Table)
 let gapTimer = 0;
 
 // --- INIT ---
 window.onload = function() {
-    document.getElementById('batch-id').innerText = "BATCH-" + Math.floor(Math.random()*9000+1000);
+    // Generate a random Batch ID on load
+    document.getElementById('batch-id').innerText = "BATCH-" + Math.floor(Math.random() * 9000 + 1000);
+    // Start GPS immediately
+    startGPS();
 };
 
 async function init() {
@@ -21,15 +24,24 @@ async function init() {
     model = await tmImage.load(modelURL, metadataURL);
     maxPredictions = model.getTotalClasses();
 
-    const flip = false; 
+    // --- CAMERA SETUP (FIXED FOR REAR CAM) ---
+    const flip = false; // Must be FALSE for rear camera
     const width = 300; 
     const height = 300; 
+    
     webcam = new tmImage.Webcam(width, height, flip); 
-    await webcam.setup(); 
+    
+    // Explicitly request the "Environment" (Rear) Camera
+    await webcam.setup({ facingMode: "environment" }); 
+    
     await webcam.play();
     window.requestAnimationFrame(loop);
 
-    document.getElementById("webcam-container").appendChild(webcam.canvas);
+    // clear old canvas and append new one
+    const container = document.getElementById("webcam-container");
+    container.innerHTML = "";
+    container.appendChild(webcam.canvas);
+    
     isScanning = true;
     document.getElementById("scan-status").innerText = "Scan 20 Apples...";
 }
@@ -87,7 +99,8 @@ async function predictHybrid() {
         if (highestProb > 0.80) {
             activeZones++;
             
-            if (bestClass === "Fresh" || bestClass === "fresh_apple") {
+            // Check if class is Fresh (adjust string to match your TM model exactly)
+            if (bestClass === "Fresh" || bestClass === "fresh_apple" || bestClass === "fresh") {
                 boxDiv.className = "grid-box status-ok";
                 boxDiv.innerText = "OK";
             } else {
@@ -184,10 +197,29 @@ function completeBatch() {
     document.getElementById("certificate-area").style.display = "block";
     document.getElementById("final-grade").innerText = grade;
     
+    // Update Sticker Details
+    const batchID = document.getElementById('batch-id').innerText;
+    document.getElementById('cert-details').innerText = `DEFECTS: ${defectRate.toFixed(1)}% | QTY: ${totalScanned}`;
+
     // Generate QR
     new QRious({
         element: document.getElementById('sticker-qr'),
-        value: `BATCH:${document.getElementById('batch-id').innerText}|GRADE:${grade}|DEFECT:${defectRate.toFixed(1)}%`,
+        value: `BATCH:${batchID}|GRADE:${grade}|DEFECT:${defectRate.toFixed(1)}%`,
         size: 80
     });
+}
+
+// --- GPS LOGIC (Simple) ---
+function startGPS() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+            const lat = position.coords.latitude.toFixed(2);
+            const lon = position.coords.longitude.toFixed(2);
+            document.getElementById('location-id').innerText = `📍 Lat: ${lat}, Lon: ${lon}`;
+        }, () => {
+            document.getElementById('location-id').innerText = "🚫 Location Denied";
+        });
+    } else {
+        document.getElementById('location-id').innerText = "⚠️ GPS Not Supported";
+    }
 }
