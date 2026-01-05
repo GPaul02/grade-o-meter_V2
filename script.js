@@ -6,23 +6,27 @@ let isScanning = false;
 let totalScanned = 0;
 let requiredApples = 20;
 let defectCount = 0;
-let lastCountTime = 0; // Timestamp for the rhythm
-const SCAN_DELAY = 1500; // 1.5 Seconds per apple (The Rhythm)
+let lastCountTime = 0; 
+const SCAN_DELAY = 1500; // 1.5 Seconds per apple
 
 // --- INIT ---
 window.onload = function() {
+    // Just set the Batch ID. Do NOT ask for GPS yet.
     document.getElementById('batch-id').innerText = "BATCH-" + Math.floor(Math.random() * 9000 + 1000);
-    startGPS();
 };
 
 async function init() {
+    // 1. TRIGGER GPS NOW (User clicked button, so browser allows it)
+    startGPS();
+
+    // 2. Load AI Model
     const modelURL = URL + "model.json";
     const metadataURL = URL + "metadata.json";
 
     model = await tmImage.load(modelURL, metadataURL);
     maxPredictions = model.getTotalClasses();
 
-    // SETUP CAMERA (Rear)
+    // 3. Setup Camera (Rear)
     const flip = false; 
     const width = 300; 
     const height = 300; 
@@ -31,13 +35,15 @@ async function init() {
     await webcam.play();
     window.requestAnimationFrame(loop);
 
+    // 4. Update DOM
     const container = document.getElementById("webcam-container");
     container.innerHTML = "";
     container.appendChild(webcam.canvas);
     
     isScanning = true;
-    totalScanned = 0; // Reset on start
+    totalScanned = 0; 
     defectCount = 0;
+    lastCountTime = Date.now(); 
     document.getElementById("scan-status").innerText = "Hold steady...";
 }
 
@@ -47,7 +53,7 @@ async function loop() {
     window.requestAnimationFrame(loop);
 }
 
-// --- THE NEW RHYTHM CORE ---
+// --- THE RHYTHM CORE ---
 async function predictRhythm() {
     const video = webcam.canvas;
     const cropCanvas = document.getElementById('crop-canvas');
@@ -85,21 +91,14 @@ async function predictRhythm() {
 
         const boxDiv = document.getElementById(zone.id);
         
-        // Threshold: Must be > 75% confident
         if (highestProb > 0.75) {
             activeZones++;
-            
-            // --- FIX 1: INNOCENT UNTIL PROVEN GUILTY ---
-            // Check strictly for BAD things. 
-            // Note: Make sure these strings match your Teachable Machine Class Names EXACTLY.
             const lowerClass = bestClass.toLowerCase();
-            
             if (lowerClass.includes("rot") || lowerClass.includes("scab") || lowerClass.includes("defect")) {
                 boxDiv.className = "grid-box status-bad";
                 boxDiv.innerText = "DEFECT";
                 frameDefectFound = true;
             } else {
-                // Everything else is OK (Fresh, Red, Apple, etc.)
                 boxDiv.className = "grid-box status-ok";
                 boxDiv.innerText = "OK";
             }
@@ -109,33 +108,23 @@ async function predictRhythm() {
         }
     }
 
-    // 2. THE RHYTHM TIMER (Fix for Counting)
+    // 2. THE RHYTHM TIMER
     const now = Date.now();
     const timeSinceLast = now - lastCountTime;
 
     if (activeZones > 0 && totalScanned < requiredApples) {
-        
-        // VISUAL FEEDBACK: Show the "Pulse" loading
-        let progress = Math.min(timeSinceLast / SCAN_DELAY, 1);
-        updateRingPulse(progress, totalScanned, requiredApples);
-
-        // If 1.5 seconds have passed, COUNT IT
         if (timeSinceLast > SCAN_DELAY) {
-            totalScanned++;
-            lastCountTime = now; // Reset timer
-            
+            totalScanned++; 
+            lastCountTime = now; 
             if (frameDefectFound) defectCount++;
-            
-            // Feedback pulse
             document.getElementById("scan-status").innerText = "Captured! Keep moving...";
-            navigator.vibrate?.(50); // Little vibration
+            if (navigator.vibrate) navigator.vibrate(50);
         } else {
              document.getElementById("scan-status").innerText = "Scanning...";
         }
-
+        let progress = Math.min((Date.now() - lastCountTime) / SCAN_DELAY, 1);
+        updateRingPulse(progress, totalScanned, requiredApples);
     } else {
-        // Not seeing apples, just reset the visual ring, NOT the timer
-        // This prevents the user from "cheating" by flashing the camera quickly
         drawHybridRing(totalScanned, requiredApples, 0); 
         document.getElementById("scan-status").innerText = "Point at apples...";
     }
@@ -157,7 +146,7 @@ function updateRingPulse(pulsePct, current, total) {
     
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Static Progress Ring (Green) - Shows Total Count
+    // Static Ring
     ctx.beginPath();
     ctx.arc(cx, cy, 60, 0, 2 * Math.PI);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
@@ -174,9 +163,8 @@ function updateRingPulse(pulsePct, current, total) {
     ctx.lineCap = "round";
     ctx.stroke();
 
-    // 2. Dynamic Pulse Ring (White) - Shows "Loading Next Apple"
-    // This fills up every 1.5 seconds
-    if (pulsePct > 0) {
+    // Pulse Ring
+    if (pulsePct > 0 && current < total) {
         ctx.beginPath();
         ctx.arc(cx, cy, 72, -0.5 * Math.PI, (2 * Math.PI * pulsePct) - 0.5 * Math.PI);
         ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
@@ -184,7 +172,6 @@ function updateRingPulse(pulsePct, current, total) {
         ctx.stroke();
     }
 
-    // Text
     ctx.fillStyle = "white";
     ctx.font = "bold 24px Montserrat";
     ctx.textAlign = "center";
@@ -194,7 +181,6 @@ function updateRingPulse(pulsePct, current, total) {
     ctx.fillText(`${current}/${total}`, cx, cy);
 }
 
-// Fallback for idle state
 function drawHybridRing(current, total, pulse) {
     updateRingPulse(pulse, current, total);
 }
@@ -202,38 +188,60 @@ function drawHybridRing(current, total, pulse) {
 function completeBatch() {
     isScanning = false;
     document.getElementById("scan-status").innerText = "BATCH COMPLETE";
-    
+    drawHybridRing(totalScanned, requiredApples, 0);
+
     const defectRate = (defectCount / totalScanned) * 100;
     let grade = "GRADE A";
     if (defectRate > 5) grade = "GRADE B";
     if (defectRate > 15) grade = "PROCESSING";
 
-    document.getElementById("certificate-area").style.display = "block";
-    
-    // Scroll to certificate
-    document.getElementById("certificate-area").scrollIntoView({behavior: "smooth"});
-    
-    // Update Sticker
-    document.querySelector(".sticker-grade").innerText = grade;
-    document.getElementById('cert-details').innerText = `DEFECTS: ${defectRate.toFixed(1)}% | QTY: ${totalScanned}`;
+    // Capture Photo
+    const video = webcam.canvas;
+    const evidenceCanvas = document.createElement("canvas");
+    evidenceCanvas.width = video.width;
+    evidenceCanvas.height = video.height;
+    const ctx = evidenceCanvas.getContext("2d");
+    ctx.drawImage(video, 0, 0); 
+    const imgData = evidenceCanvas.toDataURL("image/jpeg");
 
-    // Generate QR
+    // Show Results
+    const certArea = document.getElementById("certificate-area");
+    certArea.style.display = "block";
+    certArea.scrollIntoView({behavior: "smooth"});
+    
+    document.querySelector(".sticker-grade").innerText = grade;
     const batchID = document.getElementById('batch-id').innerText;
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    document.getElementById('cert-details').innerHTML = 
+        `BATCH: ${batchID}<br>DEFECTS: ${defectRate.toFixed(1)}% | QTY: ${totalScanned}<br>${time}`;
+
+    document.getElementById("large-proof").src = imgData;
+
     new QRious({
         element: document.getElementById('sticker-qr'),
         value: `BATCH:${batchID}|GRADE:${grade}|DEFECT:${defectRate.toFixed(1)}%`,
-        size: 80
+        size: 90
     });
 }
 
+// --- GPS LOGIC (TRIGGERED ON BUTTON CLICK) ---
 function startGPS() {
+    document.getElementById('location-id').innerText = "📡 Locating...";
+    
     if (navigator.geolocation) {
+        // High Accuracy Mode ensures mobile phones actually turn on the GPS chip
         navigator.geolocation.getCurrentPosition(position => {
-            const lat = position.coords.latitude.toFixed(2);
-            const lon = position.coords.longitude.toFixed(2);
-            document.getElementById('location-id').innerText = `📍 Lat: ${lat}, Lon: ${lon}`;
-        }, () => {
+            const lat = position.coords.latitude.toFixed(4);
+            const lon = position.coords.longitude.toFixed(4);
+            document.getElementById('location-id').innerText = `📍 ${lat}, ${lon}`;
+        }, (error) => {
+            console.log("GPS Error:", error);
             document.getElementById('location-id').innerText = "🚫 Location Denied";
+        }, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
         });
     } else {
         document.getElementById('location-id').innerText = "⚠️ GPS Not Supported";
