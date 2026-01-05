@@ -92,7 +92,7 @@ async function predictRhythm() {
 
         const boxDiv = document.getElementById(zone.id);
         
-        if (highestProb > 0.75) {
+        if (highestProb > 0.90) {
             activeZones++;
             const lowerClass = bestClass.toLowerCase();
             if (lowerClass.includes("rot") || lowerClass.includes("scab") || lowerClass.includes("defect")) {
