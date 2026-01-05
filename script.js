@@ -1,128 +1,19 @@
-// --- LANGUAGE TOGGLE LOGIC ---
-function setLang(el) {
-    document.querySelectorAll('.lang-toggle span').forEach(span => {
-        span.classList.remove('active');
-    });
-    el.classList.add('active');
-}
-
-// --- CONFIGURATION ---
-const URL = "./"; // FIXED PATH FOR GITHUB PAGES
+const URL = "./"; // GitHub Pages Path
 let model, webcam, maxPredictions;
 let isScanning = false;
-let currentDiagnosis = "Clean"; 
-let auditHistory = {}; 
 
-// --- SMOOTHING VARIABLES ---
-let lastRan = 0;
-const PREDICTION_INTERVAL = 500; // Only predict every 500ms (0.5 seconds)
+// --- HYBRID VARIABLES ---
+let totalScanned = 0;
+let requiredApples = 20;
+let defectCount = 0;
+let isLookingAtGap = true; // Start assuming we are looking at a gap
+let gapTimer = 0;
 
-// --- EXPERT KNOWLEDGE BASE ---
-const ADVICE_DB = {
-    "SCAB": {
-        title: "SCAB DETECTED",
-        steps: `
-            <li>Spray recommended fungicide immediately.</li>
-            <li>Re-scan this batch after 5–7 days.</li>
-        `,
-        verdict: "ACTION: DOWNGRADE FROM GRADE A",
-        verdictClass: "verdict-warning"
-    },
-    "ROT": {
-        title: "ROT DETECTED",
-        steps: `
-            <li>Remove infected fruit to prevent spread.</li>
-            <li>Inspect surrounding crates for contamination.</li>
-        `,
-        verdict: "CRITICAL: REJECT BATCH (DO NOT SHIP)",
-        verdictClass: "verdict-danger"
-    },
-    "FRESH": {
-        title: "BATCH CLEAN",
-        steps: `<li>Fruit quality meets Grade A standards.</li>`,
-        verdict: "READY FOR SHIPMENT",
-        verdictClass: "verdict-success"
-    }
-};
-
-// --- INITIALIZATION ---
+// --- INIT ---
 window.onload = function() {
-    generateBatchID();
-    startGPS();
+    document.getElementById('batch-id').innerText = "BATCH-" + Math.floor(Math.random()*9000+1000);
 };
 
-function generateBatchID() {
-    const batchNum = Math.floor(Math.random() * 9000) + 1000;
-    document.getElementById('batch-id').innerText = `BATCH-2025-${batchNum}`;
-}
-
-function startGPS() {
-    document.getElementById('location-id').innerText = "📡 Locating Satellites...";
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(successGPS, errorGPS);
-    } else {
-        document.getElementById('location-id').innerText = "⚠️ GPS Not Supported";
-    }
-}
-
-async function successGPS(position) {
-    const lat = position.coords.latitude;
-    const lon = position.coords.longitude;
-    try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-        const data = await response.json();
-        
-        // Smarter Fallback: Checks every possible location type
-        const locationName = data.address.city || 
-                             data.address.town || 
-                             data.address.village || 
-                             data.address.suburb || 
-                             data.address.neighbourhood ||
-                             data.address.county || 
-                             data.address.district ||
-                             "Unknown Location";
-                             
-        const state = data.address.state || "";
-        
-        // Update the UI
-        document.getElementById('location-id').innerText = `📍 ${locationName}, ${state}`;
-    } catch (error) {
-        // If internet fails, just show coordinates
-        document.getElementById('location-id').innerText = `📍 Lat: ${lat.toFixed(2)}`;
-    }
-}
-
-
-function errorGPS() {
-    document.getElementById('location-id').innerText = "🚫 Location Denied";
-}
-
-// --- EVIDENCE & QR LOGIC ---
-window.recallEvidence = function(batchID) {
-    const record = auditHistory[batchID];
-    if (!record) {
-        alert("Error: Evidence not found for this batch.");
-        return;
-    }
-
-    const certArea = document.getElementById('certificate-area');
-    certArea.style.display = "block";
-    
-    document.getElementById('cert-details').innerText = `${batchID} • ${record.location} • ${record.time}`;
-    
-    var qr = new QRious({
-      element: document.getElementById('sticker-qr'),
-      value: `CERTIFIED-GRADE-A | ${batchID} | ${record.location} | ${record.time}`,
-      size: 80,
-      background: 'white',
-      foreground: 'black'
-    });
-
-    document.getElementById('large-proof').src = record.img;
-    certArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-// --- AI & CAMERA LOGIC ---
 async function init() {
     const modelURL = URL + "model.json";
     const metadataURL = URL + "metadata.json";
@@ -130,239 +21,173 @@ async function init() {
     model = await tmImage.load(modelURL, metadataURL);
     maxPredictions = model.getTotalClasses();
 
-    const video = document.getElementById('webcam');
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
-    });
-    video.srcObject = stream;
-    video.play();
+    const flip = false; 
+    const width = 300; 
+    const height = 300; 
+    webcam = new tmImage.Webcam(width, height, flip); 
+    await webcam.setup(); 
+    await webcam.play();
+    window.requestAnimationFrame(loop);
+
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
     isScanning = true;
-    requestAnimationFrame(loop);
+    document.getElementById("scan-status").innerText = "Scan 20 Apples...";
 }
 
-// --- THE SMOOTHING LOOP ---
-async function loop(timestamp) {
-    if (isScanning) {
-        // Only run logic if 500ms has passed since last run
-        if (timestamp - lastRan >= PREDICTION_INTERVAL) {
-            await predictGrid();
-            lastRan = timestamp;
-        }
-        requestAnimationFrame(loop);
-    }
+async function loop() {
+    webcam.update(); 
+    if(isScanning) await predictHybrid();
+    window.requestAnimationFrame(loop);
 }
 
-async function predictGrid() {
-    const video = document.getElementById('webcam');
-    const canvas = document.getElementById('crop-canvas');
-    const ctx = canvas.getContext('2d');
+// --- THE HYBRID CORE ---
+async function predictHybrid() {
+    const video = webcam.canvas;
+    const cropCanvas = document.getElementById('crop-canvas');
+    const ctx = cropCanvas.getContext('2d');
     
-    const vW = video.videoWidth;
-    const vH = video.videoHeight;
+    // 1. Define 4 Zones (Coordinates)
+    const vW = video.width;
+    const vH = video.height;
     const halfW = vW / 2;
     const halfH = vH / 2;
 
-    // Define Zones with Bounding Boxes [minX, minY, maxX, maxY]
     const zones = [
-        { id: 'box-0', x: 0,     y: 0,     w: halfW, h: halfH, bbox: [0, 0, halfW, halfH] }, 
-        { id: 'box-1', x: halfW, y: 0,     w: halfW, h: halfH, bbox: [halfW, 0, vW, halfH] }, 
-        { id: 'box-2', x: 0,     y: halfH, w: halfW, h: halfH, bbox: [0, halfH, halfW, vH] }, 
-        { id: 'box-3', x: halfW, y: halfH, w: halfW, h: halfH, bbox: [halfW, halfH, vW, vH] } 
+        { id: 'box-0', x: 0,     y: 0 }, 
+        { id: 'box-1', x: halfW, y: 0 }, 
+        { id: 'box-2', x: 0,     y: halfH }, 
+        { id: 'box-3', x: halfW, y: halfH } 
     ];
 
-    let foundIssues = new Set();
-    let detectedApples = []; // List to store "active" apples
-    
+    let activeZones = 0; // How many boxes see an apple?
+    let frameDefectFound = false;
+
+    // 2. Loop Through 4 Grids (Visuals)
     for (let i = 0; i < zones.length; i++) {
         const zone = zones[i];
-        ctx.drawImage(video, zone.x, zone.y, zone.w, zone.h, 0, 0, 150, 150);
-        const prediction = await model.predict(canvas);
+        
+        // CROP the video to this zone
+        ctx.drawImage(video, zone.x, zone.y, halfW, halfH, 0, 0, 150, 150);
+        const prediction = await model.predict(cropCanvas);
 
+        // Find Best Class
         let highestProb = 0;
-        let bestIndex = 0; 
+        let bestClass = "";
         for (let j = 0; j < maxPredictions; j++) {
             if (prediction[j].probability > highestProb) {
                 highestProb = prediction[j].probability;
-                bestIndex = j;
+                bestClass = prediction[j].className;
             }
         }
 
+        // UPDATE GRID UI
         const boxDiv = document.getElementById(zone.id);
         
-        // --- LOGIC: If confidence > 50%, we consider this zone "Occupied" by an apple ---
-        if (highestProb > 0.50) {
-            detectedApples.push({ id: zone.id, bbox: zone.bbox });
-        }
-
-        // 0 = Fresh, 1/2 = Defects
-        if (bestIndex === 0) {
-            boxDiv.className = "grid-box status-ok";
-            boxDiv.innerText = "OK";
-        } else {
-            let defectName = (bestIndex === 1) ? "SCAB" : "ROT";
-            // Threshold Check: Only show defect if > 85% confident
-            if (highestProb > 0.85) { 
-                boxDiv.className = "grid-box status-bad";
-                boxDiv.innerText = defectName;
-                foundIssues.add(defectName);
-            } else {
+        // Threshold: Must be > 80% confident to be "Active"
+        if (highestProb > 0.80) {
+            activeZones++;
+            
+            if (bestClass === "Fresh" || bestClass === "fresh_apple") {
                 boxDiv.className = "grid-box status-ok";
                 boxDiv.innerText = "OK";
+            } else {
+                // It is a Defect (Scab/Rot)
+                boxDiv.className = "grid-box status-bad";
+                boxDiv.innerText = "DEFECT";
+                frameDefectFound = true;
             }
+        } else {
+            // It is a Gap (Table/Mat)
+            boxDiv.className = "grid-box status-idle";
+            boxDiv.innerText = "";
         }
     }
 
-    // --- NEW: SOCIAL DISTANCING CHECK ---
-    const isSpreadOut = checkIfSpreadOut(detectedApples);
-    
-    if (!isSpreadOut) {
-        // Overwrite panel if crowded (Mountain detected)
-        document.getElementById('advice-content').innerHTML = `
-            <div class="advice-body">
-                <div class="defect-warning" style="color:var(--warning-orange)">⚠️ MOUNTAIN DETECTED</div>
-                <ul class="action-list"><li>Apples are overlapping too much.</li><li>Please spread them out for accurate grading.</li></ul>
-            </div>
-            <div class="verdict-box verdict-warning">SPREAD OUT APPLES</div>
-        `;
-        return; // Stop grading until spread
-    }
-
-    updatePanel(foundIssues);
-}
-
-// --- UI UPDATES ---
-function updatePanel(issues) {
-    const panel = document.getElementById('advice-content');
-    
-    if (issues.size === 0) {
-        // Clean State
-        panel.innerHTML = `
-            <div class="advice-body">
-                <div class="defect-warning" style="color:#2ecc71">✅ BATCH CLEAN</div>
-                <ul class="action-list"><li>Quality meets Grade A standards.</li></ul>
-            </div>
-            <div class="verdict-box verdict-success">READY FOR SHIPMENT</div>
-        `;
-        currentDiagnosis = "Clean";
+    // 3. THE GAP COUNTER LOGIC
+    // If NO zones are active, we are looking at a gap (Table).
+    if (activeZones === 0) {
+        isLookingAtGap = true;
+        document.getElementById("scan-status").innerText = "Move to next...";
     } else {
-        // Defect State
-        let htmlContent = "";
-        let finalVerdict = "";
-        let finalClass = "";
-
-        issues.forEach(issue => {
-            const data = ADVICE_DB[issue];
-            htmlContent += `
-                <div class="defect-warning">⚠️ ${data.title}</div>
-                <ul class="action-list">${data.steps}</ul>
-            `;
-            finalVerdict = data.verdict;
-            finalClass = data.verdictClass;
-        });
-
-        panel.innerHTML = `
-            <div class="advice-body">${htmlContent}</div>
-            <div class="verdict-box ${finalClass}">${finalVerdict}</div>
-        `;
-        
-        currentDiagnosis = Array.from(issues).join(", ");
-    }
-}
-
-// --- LOGGING ---
-function logCurrentState() {
-    const batchID = document.getElementById('batch-id').innerText;
-    const location = document.getElementById('location-id').innerText.replace("📍 ", "");
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const tbody = document.getElementById('log-body');
-    const video = document.getElementById('webcam');
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 300; 
-    canvas.height = 300;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, 300, 300); 
-    const imgData = canvas.toDataURL('image/jpeg');
-
-    auditHistory[batchID] = {
-        time: time,
-        location: location,
-        img: imgData,
-        status: currentDiagnosis
-    };
-
-    let badgeClass = currentDiagnosis === "Clean" ? "badge-pass" : "badge-fail";
-    let statusText = currentDiagnosis === "Clean" ? "PASSED" : "FAILED";
-
-    let buttonHTML = "";
-    
-    if (currentDiagnosis === "Clean") {
-        buttonHTML = `<button class="btn-view-cert" onclick="window.recallEvidence('${batchID}')">📄 OPEN</button>`;
-        window.recallEvidence(batchID); 
-    } else {
-        buttonHTML = `<div class="btn-view-fail">❌</div>`;
-        document.getElementById('certificate-area').style.display = 'none';
-    }
-
-    const row = `
-        <tr>
-            <td>${buttonHTML}</td>
-            <td>${time}</td>
-            <td>${batchID}</td>
-            <td><span class="log-badge ${badgeClass}">${statusText}</span></td>
-        </tr>
-    `;
-    tbody.insertAdjacentHTML('afterbegin', row);
-
-    if (currentDiagnosis === "Clean") {
-        setTimeout(generateBatchID, 1000); 
-    }
-}
-
-// --- "SOCIAL DISTANCING" ALGORITHMS (IoU) ---
-
-// 1. The Main Check Function
-function checkIfSpreadOut(detectedApples) {
-    if (detectedApples.length < 2) return true; // 0 or 1 apple is always spread out
-
-    let overlapCount = 0;
-    const MAX_ALLOWED_OVERLAP = 0.3; // 30% overlap threshold
-
-    for (let i = 0; i < detectedApples.length; i++) {
-        for (let j = i + 1; j < detectedApples.length; j++) {
-            let boxA = detectedApples[i].bbox;
-            let boxB = detectedApples[j].bbox;
-
-            let overlapScore = calculateIoU(boxA, boxB);
-
-            if (overlapScore > MAX_ALLOWED_OVERLAP) {
-                overlapCount++;
-            }
+        // We see apples!
+        if (isLookingAtGap === true && totalScanned < requiredApples) {
+            // STATE CHANGE: Gap -> Apple. COUNT IT!
+            totalScanned++;
+            isLookingAtGap = false; // Lock until next gap
+            
+            // If this specific frame had a defect, record it
+            if (frameDefectFound) defectCount++;
+            
+            // Visual Feedback
+            document.getElementById("scan-status").innerText = "Scanning...";
         }
     }
 
-    // If more than 50% are touching, fail the check
-    let threshold = detectedApples.length * 0.5; 
-    return overlapCount <= threshold;
+    // 4. Update Ring Visuals
+    drawHybridRing(totalScanned, requiredApples);
+
+    // 5. Completion Check
+    if (totalScanned >= requiredApples) {
+        completeBatch();
+    }
 }
 
-// 2. The Helper Math (Intersection over Union)
-function calculateIoU(boxA, boxB) {
-    // boxA = [minX, minY, maxX, maxY]
+// --- RING DRAWING ---
+function drawHybridRing(current, total) {
+    const canvas = document.getElementById("overlay-canvas");
+    const ctx = canvas.getContext("2d");
+    const width = canvas.width;
+    const height = canvas.height;
+    const cx = width / 2;
+    const cy = height / 2;
     
-    let xA = Math.max(boxA[0], boxB[0]);
-    let yA = Math.max(boxA[1], boxB[1]);
-    let xB = Math.min(boxA[2], boxB[2]);
-    let yB = Math.min(boxA[3], boxB[3]);
+    ctx.clearRect(0, 0, width, height);
 
-    let intersectWidth = Math.max(0, xB - xA);
-    let intersectHeight = Math.max(0, yB - yA);
-    let intersectionArea = intersectWidth * intersectHeight;
+    // Draw Ring Background
+    ctx.beginPath();
+    ctx.arc(cx, cy, 60, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = 8;
+    ctx.stroke();
 
-    let areaA = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1]);
-    let areaB = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1]);
-    let unionArea = areaA + areaB - intersectionArea;
+    // Draw Progress
+    const pct = current / total;
+    const endAngle = (2 * Math.PI * pct) - 0.5 * Math.PI;
+    
+    ctx.beginPath();
+    ctx.arc(cx, cy, 60, -0.5 * Math.PI, endAngle);
+    ctx.strokeStyle = "#2ecc71";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.stroke();
 
-    if (unionArea === 0) return 0;
-    return intersectionArea / unionArea;
+    // Draw Count Text
+    ctx.fillStyle = "white";
+    ctx.font = "bold 24px Montserrat";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor="black";
+    ctx.shadowBlur=4;
+    ctx.fillText(`${current}/${total}`, cx, cy);
+}
+
+function completeBatch() {
+    isScanning = false;
+    document.getElementById("scan-status").innerText = "BATCH COMPLETE";
+    
+    // Calculate Grade
+    const defectRate = (defectCount / totalScanned) * 100;
+    let grade = "GRADE A";
+    if (defectRate > 5) grade = "GRADE B";
+    if (defectRate > 15) grade = "PROCESSING";
+
+    document.getElementById("certificate-area").style.display = "block";
+    document.getElementById("final-grade").innerText = grade;
+    
+    // Generate QR
+    new QRious({
+        element: document.getElementById('sticker-qr'),
+        value: `BATCH:${document.getElementById('batch-id').innerText}|GRADE:${grade}|DEFECT:${defectRate.toFixed(1)}%`,
+        size: 80
+    });
 }
