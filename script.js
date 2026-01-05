@@ -13,7 +13,7 @@ let isScanning = false;
 let currentDiagnosis = "Clean"; 
 let auditHistory = {}; 
 
-// --- SMOOTHING VARIABLES (THE FIX) ---
+// --- SMOOTHING VARIABLES ---
 let lastRan = 0;
 const PREDICTION_INTERVAL = 500; // Only predict every 500ms (0.5 seconds)
 
@@ -162,14 +162,16 @@ async function predictGrid() {
     const halfW = vW / 2;
     const halfH = vH / 2;
 
+    // Define Zones with Bounding Boxes [minX, minY, maxX, maxY]
     const zones = [
-        { id: 'box-0', x: 0,     y: 0,     w: halfW, h: halfH }, 
-        { id: 'box-1', x: halfW, y: 0,     w: halfW, h: halfH }, 
-        { id: 'box-2', x: 0,     y: halfH, w: halfW, h: halfH }, 
-        { id: 'box-3', x: halfW, y: halfH, w: halfW, h: halfH } 
+        { id: 'box-0', x: 0,     y: 0,     w: halfW, h: halfH, bbox: [0, 0, halfW, halfH] }, 
+        { id: 'box-1', x: halfW, y: 0,     w: halfW, h: halfH, bbox: [halfW, 0, vW, halfH] }, 
+        { id: 'box-2', x: 0,     y: halfH, w: halfW, h: halfH, bbox: [0, halfH, halfW, vH] }, 
+        { id: 'box-3', x: halfW, y: halfH, w: halfW, h: halfH, bbox: [halfW, halfH, vW, vH] } 
     ];
 
     let foundIssues = new Set();
+    let detectedApples = []; // List to store "active" apples
     
     for (let i = 0; i < zones.length; i++) {
         const zone = zones[i];
@@ -187,6 +189,11 @@ async function predictGrid() {
 
         const boxDiv = document.getElementById(zone.id);
         
+        // --- LOGIC: If confidence > 50%, we consider this zone "Occupied" by an apple ---
+        if (highestProb > 0.50) {
+            detectedApples.push({ id: zone.id, bbox: zone.bbox });
+        }
+
         // 0 = Fresh, 1/2 = Defects
         if (bestIndex === 0) {
             boxDiv.className = "grid-box status-ok";
@@ -204,6 +211,22 @@ async function predictGrid() {
             }
         }
     }
+
+    // --- NEW: SOCIAL DISTANCING CHECK ---
+    const isSpreadOut = checkIfSpreadOut(detectedApples);
+    
+    if (!isSpreadOut) {
+        // Overwrite panel if crowded (Mountain detected)
+        document.getElementById('advice-content').innerHTML = `
+            <div class="advice-body">
+                <div class="defect-warning" style="color:var(--warning-orange)">⚠️ MOUNTAIN DETECTED</div>
+                <ul class="action-list"><li>Apples are overlapping too much.</li><li>Please spread them out for accurate grading.</li></ul>
+            </div>
+            <div class="verdict-box verdict-warning">SPREAD OUT APPLES</div>
+        `;
+        return; // Stop grading until spread
+    }
+
     updatePanel(foundIssues);
 }
 
@@ -294,4 +317,52 @@ function logCurrentState() {
     if (currentDiagnosis === "Clean") {
         setTimeout(generateBatchID, 1000); 
     }
+}
+
+// --- "SOCIAL DISTANCING" ALGORITHMS (IoU) ---
+
+// 1. The Main Check Function
+function checkIfSpreadOut(detectedApples) {
+    if (detectedApples.length < 2) return true; // 0 or 1 apple is always spread out
+
+    let overlapCount = 0;
+    const MAX_ALLOWED_OVERLAP = 0.3; // 30% overlap threshold
+
+    for (let i = 0; i < detectedApples.length; i++) {
+        for (let j = i + 1; j < detectedApples.length; j++) {
+            let boxA = detectedApples[i].bbox;
+            let boxB = detectedApples[j].bbox;
+
+            let overlapScore = calculateIoU(boxA, boxB);
+
+            if (overlapScore > MAX_ALLOWED_OVERLAP) {
+                overlapCount++;
+            }
+        }
+    }
+
+    // If more than 50% are touching, fail the check
+    let threshold = detectedApples.length * 0.5; 
+    return overlapCount <= threshold;
+}
+
+// 2. The Helper Math (Intersection over Union)
+function calculateIoU(boxA, boxB) {
+    // boxA = [minX, minY, maxX, maxY]
+    
+    let xA = Math.max(boxA[0], boxB[0]);
+    let yA = Math.max(boxA[1], boxB[1]);
+    let xB = Math.min(boxA[2], boxB[2]);
+    let yB = Math.min(boxA[3], boxB[3]);
+
+    let intersectWidth = Math.max(0, xB - xA);
+    let intersectHeight = Math.max(0, yB - yA);
+    let intersectionArea = intersectWidth * intersectHeight;
+
+    let areaA = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1]);
+    let areaB = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1]);
+    let unionArea = areaA + areaB - intersectionArea;
+
+    if (unionArea === 0) return 0;
+    return intersectionArea / unionArea;
 }
