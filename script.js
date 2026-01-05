@@ -36,9 +36,8 @@ async function init() {
     container.appendChild(webcam.canvas);
     
     isScanning = true;
-    totalScanned = 0; 
+    totalScanned = 0; // Reset on start
     defectCount = 0;
-    lastCountTime = Date.now(); // Start timer now
     document.getElementById("scan-status").innerText = "Hold steady...";
 }
 
@@ -48,7 +47,7 @@ async function loop() {
     window.requestAnimationFrame(loop);
 }
 
-// --- THE RHYTHM CORE ---
+// --- THE NEW RHYTHM CORE ---
 async function predictRhythm() {
     const video = webcam.canvas;
     const cropCanvas = document.getElementById('crop-canvas');
@@ -90,13 +89,17 @@ async function predictRhythm() {
         if (highestProb > 0.75) {
             activeZones++;
             
-            // INNOCENT UNTIL PROVEN GUILTY LOGIC
+            // --- FIX 1: INNOCENT UNTIL PROVEN GUILTY ---
+            // Check strictly for BAD things. 
+            // Note: Make sure these strings match your Teachable Machine Class Names EXACTLY.
             const lowerClass = bestClass.toLowerCase();
+            
             if (lowerClass.includes("rot") || lowerClass.includes("scab") || lowerClass.includes("defect")) {
                 boxDiv.className = "grid-box status-bad";
                 boxDiv.innerText = "DEFECT";
                 frameDefectFound = true;
             } else {
+                // Everything else is OK (Fresh, Red, Apple, etc.)
                 boxDiv.className = "grid-box status-ok";
                 boxDiv.innerText = "OK";
             }
@@ -106,31 +109,33 @@ async function predictRhythm() {
         }
     }
 
-    // 2. THE RHYTHM TIMER (Fix applied here)
+    // 2. THE RHYTHM TIMER (Fix for Counting)
     const now = Date.now();
     const timeSinceLast = now - lastCountTime;
 
     if (activeZones > 0 && totalScanned < requiredApples) {
         
-        // LOGIC FIRST: Check if we need to count
+        // VISUAL FEEDBACK: Show the "Pulse" loading
+        let progress = Math.min(timeSinceLast / SCAN_DELAY, 1);
+        updateRingPulse(progress, totalScanned, requiredApples);
+
+        // If 1.5 seconds have passed, COUNT IT
         if (timeSinceLast > SCAN_DELAY) {
-            totalScanned++; // Increment to 20 HERE
-            lastCountTime = now; 
+            totalScanned++;
+            lastCountTime = now; // Reset timer
             
             if (frameDefectFound) defectCount++;
             
+            // Feedback pulse
             document.getElementById("scan-status").innerText = "Captured! Keep moving...";
-            if (navigator.vibrate) navigator.vibrate(50);
+            navigator.vibrate?.(50); // Little vibration
         } else {
              document.getElementById("scan-status").innerText = "Scanning...";
         }
 
-        // DRAW SECOND: Now we draw, so if it became 20 above, we draw 20.
-        let progress = Math.min((Date.now() - lastCountTime) / SCAN_DELAY, 1);
-        updateRingPulse(progress, totalScanned, requiredApples);
-
     } else {
-        // Not seeing apples
+        // Not seeing apples, just reset the visual ring, NOT the timer
+        // This prevents the user from "cheating" by flashing the camera quickly
         drawHybridRing(totalScanned, requiredApples, 0); 
         document.getElementById("scan-status").innerText = "Point at apples...";
     }
@@ -152,7 +157,7 @@ function updateRingPulse(pulsePct, current, total) {
     
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Static Progress Ring (Green)
+    // 1. Static Progress Ring (Green) - Shows Total Count
     ctx.beginPath();
     ctx.arc(cx, cy, 60, 0, 2 * Math.PI);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
@@ -169,8 +174,9 @@ function updateRingPulse(pulsePct, current, total) {
     ctx.lineCap = "round";
     ctx.stroke();
 
-    // 2. Dynamic Pulse Ring (White)
-    if (pulsePct > 0 && current < total) {
+    // 2. Dynamic Pulse Ring (White) - Shows "Loading Next Apple"
+    // This fills up every 1.5 seconds
+    if (pulsePct > 0) {
         ctx.beginPath();
         ctx.arc(cx, cy, 72, -0.5 * Math.PI, (2 * Math.PI * pulsePct) - 0.5 * Math.PI);
         ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
@@ -197,15 +203,14 @@ function completeBatch() {
     isScanning = false;
     document.getElementById("scan-status").innerText = "BATCH COMPLETE";
     
-    // SAFETY DRAW: Force it to show 20/20 one last time
-    drawHybridRing(totalScanned, requiredApples, 0);
-
     const defectRate = (defectCount / totalScanned) * 100;
     let grade = "GRADE A";
     if (defectRate > 5) grade = "GRADE B";
     if (defectRate > 15) grade = "PROCESSING";
 
     document.getElementById("certificate-area").style.display = "block";
+    
+    // Scroll to certificate
     document.getElementById("certificate-area").scrollIntoView({behavior: "smooth"});
     
     // Update Sticker
