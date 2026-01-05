@@ -246,6 +246,54 @@
             .sticker-info { padding-left: 0; }
             #sticker-qr { margin-left: 0; }
         }
+
+        /* --- STRICT PRINT STYLES --- */
+        @media print {
+            /* 1. Hide Everything Else */
+            .lang-toggle, .header, .meta-bar, #scan-container, .btn-group, .evidence-header {
+                display: none !important;
+            }
+
+            /* 2. Reset Body */
+            body {
+                background: white;
+                padding: 0; margin: 0;
+            }
+            .dashboard-container, .app-card {
+                box-shadow: none; border: none;
+                margin: 0; padding: 0;
+                width: 100%; max-width: 100%;
+            }
+
+            /* 3. Position Certificate */
+            #certificate-area {
+                display: block !important;
+                position: absolute;
+                top: 0; left: 0;
+                width: 100%;
+                margin: 0; padding: 10px;
+            }
+
+            /* 4. Ensure Colors Print */
+            .sticker {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                border: 2px solid #000; /* Darker border for print */
+                box-shadow: none;
+            }
+            .sticker::before {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .sticker-grade {
+                color: #2ecc71 !important;
+                -webkit-print-color-adjust: exact;
+            }
+            .proof-photo-large {
+                border: 1px solid #ccc;
+                max-height: 400px;
+            }
+        }
     </style>
 </head>
 <body>
