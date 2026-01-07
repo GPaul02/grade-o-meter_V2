@@ -2,17 +2,20 @@ const URL = "./"; // GitHub Pages Path
 let model, webcam, maxPredictions;
 let isScanning = false;
 
-// --- RHYTHM SCANNER VARIABLES ---
+// --- VARIABLES ---
 let totalScanned = 0;
 let requiredApples = 20;
 let defectCount = 0;
-let lastCountTime = 0; 
-const SCAN_DELAY = 1500; // 1.5 Seconds per apple
+
+// --- GAP DETECTION STATE ---
+// We start assuming we are looking at a gap (Table/Mat)
+let isLookingAtGap = true; 
 
 // --- AUDIT HISTORY STORE ---
 let auditHistory = []; 
 
 window.onload = function() {
+    // Generate Random Batch ID on load
     document.getElementById('batch-id').innerText = "BATCH-" + Math.floor(Math.random() * 9000 + 1000);
 };
 
@@ -24,6 +27,7 @@ async function init() {
     model = await tmImage.load(modelURL, metadataURL);
     maxPredictions = model.getTotalClasses();
 
+    // 1. Setup Webcam
     const flip = false; 
     const width = 300; 
     const height = 300; 
@@ -32,30 +36,33 @@ async function init() {
     await webcam.play();
     window.requestAnimationFrame(loop);
 
+    // 2. Attach to HTML
     const container = document.getElementById("webcam-container");
     container.innerHTML = "";
     container.appendChild(webcam.canvas);
     
+    // 3. Reset State
     isScanning = true;
     totalScanned = 0; 
     defectCount = 0;
-    lastCountTime = Date.now(); 
-    document.getElementById("scan-status").innerText = "Hold steady...";
+    isLookingAtGap = true; // Reset gap logic
+
+    document.getElementById("scan-status").innerText = "Find an apple...";
     
-    // Generate new Batch ID for the new scan
+    // Generate new Batch ID
     document.getElementById('batch-id').innerText = "BATCH-" + Math.floor(Math.random() * 9000 + 1000);
-    // Hide old certificate while scanning
+    // Hide old certificate
     document.getElementById("certificate-area").style.display = "none";
 }
 
 async function loop() {
     webcam.update(); 
-    if(isScanning) await predictRhythm();
+    if(isScanning) await predictGapLogic();
     window.requestAnimationFrame(loop);
 }
 
-// --- THE RHYTHM CORE ---
-async function predictRhythm() {
+// --- THE CORE: GAP DETECTION LOGIC ---
+async function predictGapLogic() {
     const video = webcam.canvas;
     const cropCanvas = document.getElementById('crop-canvas');
     const ctx = cropCanvas.getContext('2d');
@@ -65,6 +72,7 @@ async function predictRhythm() {
     const halfW = vW / 2;
     const halfH = vH / 2;
 
+    // Define 4 Grid Zones
     const zones = [
         { id: 'box-0', x: 0,     y: 0 }, 
         { id: 'box-1', x: halfW, y: 0 }, 
@@ -75,7 +83,7 @@ async function predictRhythm() {
     let activeZones = 0; 
     let frameDefectFound = false;
 
-    // 1. Loop Through 4 Grids
+    // 1. Analyze Each Zone
     for (let i = 0; i < zones.length; i++) {
         const zone = zones[i];
         ctx.drawImage(video, zone.x, zone.y, halfW, halfH, 0, 0, 150, 150);
@@ -92,8 +100,11 @@ async function predictRhythm() {
 
         const boxDiv = document.getElementById(zone.id);
         
-        if (highestProb > 0.90) {
+        // Threshold > 85% to confirm an object
+        if (highestProb > 0.85 && bestClass !== "Background") {
             activeZones++;
+            
+            // Defect Check
             const lowerClass = bestClass.toLowerCase();
             if (lowerClass.includes("rot") || lowerClass.includes("scab") || lowerClass.includes("defect")) {
                 boxDiv.className = "grid-box status-bad";
@@ -104,40 +115,46 @@ async function predictRhythm() {
                 boxDiv.innerText = "OK";
             }
         } else {
+            // Low confidence or Background = GAP
             boxDiv.className = "grid-box status-idle";
             boxDiv.innerText = "";
         }
     }
 
-    // 2. THE RHYTHM TIMER
-    const now = Date.now();
-    const timeSinceLast = now - lastCountTime;
-
-    if (activeZones > 0 && totalScanned < requiredApples) {
-        if (timeSinceLast > SCAN_DELAY) {
-            totalScanned++; 
-            lastCountTime = now; 
+    // 2. THE LOGIC SWITCH (Anti-Mountain)
+    if (activeZones === 0) {
+        // We are looking at a table/gap
+        isLookingAtGap = true;
+        document.getElementById("scan-status").innerText = "Move to next...";
+    } else {
+        // We see an Apple (Active Zones > 0)
+        if (isLookingAtGap === true && totalScanned < requiredApples) {
+            // STATE CHANGE: We just moved from Gap -> Apple. COUNT IT!
+            totalScanned++;
+            isLookingAtGap = false; // Lock counting until we see a gap again
+            
             if (frameDefectFound) defectCount++;
-            document.getElementById("scan-status").innerText = "Captured! Keep moving...";
+            
+            // Feedback
+            document.getElementById("scan-status").innerText = "Captured!";
             if (navigator.vibrate) navigator.vibrate(50);
         } else {
+             // We are still looking at the SAME apple
              document.getElementById("scan-status").innerText = "Scanning...";
         }
-        let progress = Math.min((Date.now() - lastCountTime) / SCAN_DELAY, 1);
-        updateRingPulse(progress, totalScanned, requiredApples);
-    } else {
-        drawHybridRing(totalScanned, requiredApples, 0); 
-        document.getElementById("scan-status").innerText = "Point at apples...";
     }
 
-    // 3. Completion Check
+    // 3. Draw Ring UI
+    drawHybridRing(totalScanned, requiredApples);
+
+    // 4. Completion Check
     if (totalScanned >= requiredApples) {
         completeBatch();
     }
 }
 
 // --- VISUALS ---
-function updateRingPulse(pulsePct, current, total) {
+function drawHybridRing(current, total) {
     const canvas = document.getElementById("overlay-canvas");
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
@@ -147,14 +164,16 @@ function updateRingPulse(pulsePct, current, total) {
     
     ctx.clearRect(0, 0, width, height);
 
+    // Background Ring
     ctx.beginPath();
     ctx.arc(cx, cy, 60, 0, 2 * Math.PI);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
     ctx.lineWidth = 8;
     ctx.stroke();
 
-    const totalPct = current / total;
-    const endAngle = (2 * Math.PI * totalPct) - 0.5 * Math.PI;
+    // Progress Ring (Green)
+    const pct = current / total;
+    const endAngle = (2 * Math.PI * pct) - 0.5 * Math.PI;
     
     ctx.beginPath();
     ctx.arc(cx, cy, 60, -0.5 * Math.PI, endAngle);
@@ -163,14 +182,7 @@ function updateRingPulse(pulsePct, current, total) {
     ctx.lineCap = "round";
     ctx.stroke();
 
-    if (pulsePct > 0 && current < total) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, 72, -0.5 * Math.PI, (2 * Math.PI * pulsePct) - 0.5 * Math.PI);
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-        ctx.lineWidth = 4;
-        ctx.stroke();
-    }
-
+    // Text Center
     ctx.fillStyle = "white";
     ctx.font = "bold 24px Montserrat";
     ctx.textAlign = "center";
@@ -180,21 +192,18 @@ function updateRingPulse(pulsePct, current, total) {
     ctx.fillText(`${current}/${total}`, cx, cy);
 }
 
-function drawHybridRing(current, total, pulse) {
-    updateRingPulse(pulse, current, total);
-}
-
 function completeBatch() {
     isScanning = false;
     document.getElementById("scan-status").innerText = "BATCH COMPLETE";
-    drawHybridRing(totalScanned, requiredApples, 0);
+    drawHybridRing(totalScanned, requiredApples);
 
+    // Calculate Grade
     const defectRate = (defectCount / totalScanned) * 100;
     let grade = "GRADE A";
     if (defectRate > 5) grade = "GRADE B";
     if (defectRate > 15) grade = "PROCESSING";
 
-    // Capture Photo
+    // Capture Evidence Photo
     const video = webcam.canvas;
     const evidenceCanvas = document.createElement("canvas");
     evidenceCanvas.width = video.width;
@@ -217,19 +226,19 @@ function completeBatch() {
     document.getElementById('cert-details').innerHTML = `BATCH: ${batchID}<br>${detailsText}`;
     document.getElementById("large-proof").src = imgData;
 
+    // Generate QR
     new QRious({
         element: document.getElementById('sticker-qr'),
         value: `BATCH:${batchID}|GRADE:${grade}|DEFECT:${defectRate.toFixed(1)}%`,
         size: 90
     });
 
-    // --- UPDATE LEDGER ---
+    // Save to Ledger
     updateLedger(batchID, timeStr, grade, imgData, defectRate.toFixed(1), totalScanned);
 }
 
 // --- LEDGER LOGIC ---
 function updateLedger(batchID, time, grade, imgData, defectRate, totalScanned) {
-    // 1. Save to History
     const record = {
         id: batchID,
         time: time,
@@ -240,7 +249,6 @@ function updateLedger(batchID, time, grade, imgData, defectRate, totalScanned) {
     };
     auditHistory.push(record);
 
-    // 2. Add Row to Table
     const tbody = document.getElementById('log-body');
     const row = document.createElement('tr');
     const badgeClass = record.status === "PASSED" ? "badge-pass" : "badge-fail";
@@ -254,23 +262,19 @@ function updateLedger(batchID, time, grade, imgData, defectRate, totalScanned) {
     tbody.prepend(row);
 }
 
-// Function to recall old data
 window.loadPastRecord = function(targetID) {
     const record = auditHistory.find(r => r.id === targetID);
     if(!record) return;
 
-    // Repopulate Certificate
     document.querySelector(".sticker-grade").innerText = record.grade;
     document.getElementById('cert-details').innerHTML = 
         `BATCH: ${record.id}<br>${record.details}<br>${record.time}`;
     document.getElementById("large-proof").src = record.img;
     
-    // Show Area
     const certArea = document.getElementById("certificate-area");
     certArea.style.display = "block";
     certArea.scrollIntoView({behavior: "smooth"});
     
-    // Regen QR
      new QRious({
         element: document.getElementById('sticker-qr'),
         value: `BATCH:${record.id}|GRADE:${record.grade}`,
